@@ -18,7 +18,7 @@ const openSans = Open_Sans({
 export const metadata: Metadata = {
   title: "Retirement Calculator | United Benefits",
   description:
-    "See if you're on track for retirement with the United Benefits Retirement Readiness Calculator — a free 3-step educational tool.",
+    "See if you're on track for retirement with the United Benefits Retirement Readiness Calculator — a free 5-step educational tool.",
   icons: { icon: "/favicon.png" },
   openGraph: {
     title: "Retirement Calculator | United Benefits",

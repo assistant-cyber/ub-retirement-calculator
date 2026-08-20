@@ -1,4 +1,4 @@
-const steps = ["Your vision", "Your savings", "Results"];
+const steps = ["About You", "Benefits", "Goals", "Accounts", "Results"];
 
 export default function Stepper({ current }: { current: number }) {
   return (

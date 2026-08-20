@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import Stepper from "@/components/Stepper";
-import StepVision from "@/components/StepVision";
+import StepAbout from "@/components/StepAbout";
+import StepBenefits from "@/components/StepBenefits";
+import StepGoals from "@/components/StepGoals";
 import StepAssets from "@/components/StepAssets";
 import StepResults from "@/components/StepResults";
 import { DEFAULT_ASSUMPTIONS } from "@/lib/calc";
-import type { VisionState, AssetsState, Asset } from "@/types";
+import { initialBenefitsState } from "@/lib/profile";
+import type { AboutState, AssetsState, Asset, BenefitsState, GoalsState } from "@/types";
 
 let assetCounter = 0;
 export function newAsset(): Asset {
@@ -21,14 +24,24 @@ export function newAsset(): Asset {
   };
 }
 
-const initialVision = (): VisionState => ({
+const initialAbout = (): AboutState => ({
   currentAge: 35,
   retirementAge: 65,
+  maritalStatus: null,
+  federalStatus: null,
+  agency: "",
+  yearsOfService: null,
+});
+
+const initialGoals = (): GoalsState => ({
   lifestyle: null,
   monthlySpend: 0,
   homePaidOff: true,
   monthlyHousing: 0,
   monthlySocialSecurity: 0,
+  idealRetirement: "",
+  biggestWorry: "",
+  priorities: [],
 });
 
 const initialAssets = (): AssetsState => ({
@@ -39,11 +52,15 @@ const initialAssets = (): AssetsState => ({
 
 export default function Wizard() {
   const [step, setStep] = useState(1);
-  const [vision, setVision] = useState<VisionState>(initialVision);
+  const [about, setAbout] = useState<AboutState>(initialAbout);
+  const [benefits, setBenefits] = useState<BenefitsState>(initialBenefitsState);
+  const [goals, setGoals] = useState<GoalsState>(initialGoals);
   const [assetsStep, setAssetsStep] = useState<AssetsState>(initialAssets);
 
   const startOver = () => {
-    setVision(initialVision());
+    setAbout(initialAbout());
+    setBenefits(initialBenefitsState());
+    setGoals(initialGoals());
     setAssetsStep(initialAssets());
     setStep(1);
   };
@@ -51,22 +68,38 @@ export default function Wizard() {
   return (
     <div>
       <Stepper current={step} />
-      {step === 1 && (
-        <StepVision vision={vision} onChange={setVision} onNext={() => setStep(2)} />
-      )}
+      {step === 1 && <StepAbout about={about} onChange={setAbout} onNext={() => setStep(2)} />}
       {step === 2 && (
-        <StepAssets
-          assetsStep={assetsStep}
-          onChange={setAssetsStep}
+        <StepBenefits
+          benefits={benefits}
+          onChange={setBenefits}
           onBack={() => setStep(1)}
           onNext={() => setStep(3)}
         />
       )}
       {step === 3 && (
-        <StepResults
-          vision={vision}
-          assetsStep={assetsStep}
+        <StepGoals
+          goals={goals}
+          onChange={setGoals}
           onBack={() => setStep(2)}
+          onNext={() => setStep(4)}
+        />
+      )}
+      {step === 4 && (
+        <StepAssets
+          assetsStep={assetsStep}
+          onChange={setAssetsStep}
+          onBack={() => setStep(3)}
+          onNext={() => setStep(5)}
+        />
+      )}
+      {step === 5 && (
+        <StepResults
+          about={about}
+          benefits={benefits}
+          goals={goals}
+          assetsStep={assetsStep}
+          onBack={() => setStep(4)}
           onStartOver={startOver}
         />
       )}

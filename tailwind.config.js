@@ -8,6 +8,7 @@ module.exports = {
         mulberry: "#9c221f",
         gold: "#c9a227",
         track: "#2e7d4f",
+        green: "#2e7d4f",
         ivory: "#f7f7f9",
       },
       fontFamily: {

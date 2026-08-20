@@ -41,7 +41,7 @@ export default function StepAssets({ assetsStep, onChange, onBack, onNext }: Pro
   return (
     <section className="card" aria-labelledby="step2-heading">
       <h2 id="step2-heading" className="mb-1 text-2xl font-bold">
-        Your current assets &amp; savings
+        Your current situation
       </h2>
       <p className="mb-6 text-gray-600">
         Add each account you&apos;re saving in. Estimates are fine.

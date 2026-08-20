@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   AreaChart,
   Area,
@@ -11,8 +12,20 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { computeResults, projectionByYear, projectAsset } from "@/lib/calc";
-import type { VisionState, AssetsState } from "@/types";
+import { computeResults, projectionByYear, projectAsset, monthlyEquivalent } from "@/lib/calc";
+import { toVisionState } from "@/lib/profile";
+import type {
+  AboutState,
+  AdvisorInsights,
+  AssetsState,
+  BenefitsState,
+  GoalsState,
+} from "@/types";
+
+// react-pdf must never render during SSR — load the download button client-only.
+const DownloadReportButton = dynamic(() => import("@/components/DownloadReportButton"), {
+  ssr: false,
+});
 
 const ASSET_LABELS: Record<string, string> = {
   "401k": "401(k) / TSP",
@@ -56,18 +69,83 @@ const BAND_META = {
 } as const;
 
 interface Props {
-  vision: VisionState;
+  about: AboutState;
+  benefits: BenefitsState;
+  goals: GoalsState;
   assetsStep: AssetsState;
   onBack: () => void;
   onStartOver: () => void;
 }
 
-export default function StepResults({ vision, assetsStep, onBack, onStartOver }: Props) {
+type InsightsStatus = "loading" | "ready" | "error";
+
+export default function StepResults({
+  about,
+  benefits,
+  goals,
+  assetsStep,
+  onBack,
+  onStartOver,
+}: Props) {
+  const vision = useMemo(() => toVisionState(about, goals), [about, goals]);
   const results = useMemo(() => computeResults(vision, assetsStep), [vision, assetsStep]);
   const chartData = useMemo(
     () => projectionByYear(assetsStep, vision.currentAge, vision.retirementAge),
     [assetsStep, vision.currentAge, vision.retirementAge]
   );
+
+  const [insights, setInsights] = useState<AdvisorInsights | null>(null);
+  const [insightsStatus, setInsightsStatus] = useState<InsightsStatus>("loading");
+  const requestedRef = useRef(false);
+
+  const fetchInsights = useCallback(async () => {
+    setInsightsStatus("loading");
+    try {
+      const assetsSummary = {
+        totalCurrentBalance: assetsStep.assets.reduce((s, a) => s + a.balance, 0),
+        totalMonthlyContribution: assetsStep.assets.reduce(
+          (s, a) => s + monthlyEquivalent(a.contribution, a.frequency),
+          0
+        ),
+        annualEmployerMatch: assetsStep.annualEmployerMatch,
+        accountTypes: Array.from(new Set(assetsStep.assets.map((a) => ASSET_LABELS[a.type]))),
+      };
+      const res = await fetch("/api/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          about,
+          benefits,
+          goals,
+          assetsSummary,
+          results: {
+            years: results.years,
+            projected: results.projected,
+            needed: results.needed,
+            percent: results.percent,
+            band: results.band,
+            gap: results.gap,
+            extraMonthlyToClose: results.extraMonthlyToClose,
+            sustainableMonthlyIncome: results.sustainableMonthlyIncome,
+            netNeedAtRetirementMonthly: results.netNeedAtRetirementMonthly,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(`Insights request failed (${res.status})`);
+      const data = (await res.json()) as AdvisorInsights;
+      setInsights(data);
+      setInsightsStatus("ready");
+    } catch (e) {
+      console.error(e);
+      setInsightsStatus("error");
+    }
+  }, [about, benefits, goals, assetsStep, results]);
+
+  useEffect(() => {
+    if (requestedRef.current) return;
+    requestedRef.current = true;
+    void fetchInsights();
+  }, [fetchInsights]);
 
   const band = BAND_META[results.band];
 
@@ -151,6 +229,105 @@ export default function StepResults({ vision, assetsStep, onBack, onStartOver }:
             gap by age {vision.retirementAge}.
           </p>
         )}
+      </section>
+
+      {/* Advisor insights */}
+      <section className="card" aria-labelledby="insights-heading">
+        <h2 id="insights-heading" className="mb-1 text-xl font-bold">
+          Your Personalized Advisor Insights
+        </h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Generated from your answers by the United Benefits advisor assistant.
+        </p>
+
+        {insightsStatus === "loading" && (
+          <div aria-busy="true" className="space-y-3">
+            <p className="font-semibold text-navy">Your advisor insights are being prepared…</p>
+            <div className="h-4 w-3/4 animate-pulse rounded bg-navy/10" />
+            <div className="h-4 w-full animate-pulse rounded bg-navy/10" />
+            <div className="h-4 w-5/6 animate-pulse rounded bg-navy/10" />
+            <div className="h-4 w-2/3 animate-pulse rounded bg-navy/10" />
+          </div>
+        )}
+
+        {insightsStatus === "error" && (
+          <div className="rounded-lg bg-mulberry/5 p-4">
+            <p className="font-semibold text-mulberry">
+              We couldn&apos;t prepare your personalized insights just now. Your numbers above are
+              still accurate.
+            </p>
+            <button type="button" className="btn-secondary mt-3" onClick={() => void fetchInsights()}>
+              Try again
+            </button>
+          </div>
+        )}
+
+        {insightsStatus === "ready" && insights && (
+          <div className="space-y-6">
+            <p className="text-gray-700">{insights.summary}</p>
+
+            {insights.benefitGaps.length > 0 && (
+              <div>
+                <h3 className="mb-2 font-heading text-lg font-bold text-navy">
+                  Benefit gaps to review
+                </h3>
+                <ul className="space-y-3">
+                  {insights.benefitGaps.map((g, i) => (
+                    <li key={i} className="rounded-lg border border-gray-200 bg-ivory/60 p-4">
+                      <p className="font-semibold text-mulberry">{g.title}</p>
+                      <p className="mt-1 text-sm text-gray-700">{g.detail}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div>
+              <h3 className="mb-2 font-heading text-lg font-bold text-navy">
+                Your goals &amp; your numbers
+              </h3>
+              <p className="text-gray-700">{insights.goalAlignment}</p>
+            </div>
+
+            <div>
+              <h3 className="mb-2 font-heading text-lg font-bold text-navy">
+                Recommended next steps
+              </h3>
+              <ol className="space-y-3">
+                {insights.actionSteps.map((s, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-navy text-sm font-bold text-white">
+                      {i + 1}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-navy">{s.step}</p>
+                      <p className="text-sm text-gray-700">{s.why}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <p className="italic text-gray-700">{insights.encouragement}</p>
+
+            {insights.mock && (
+              <p className="text-xs text-gray-400">
+                Preview insights generated locally (no advisor AI key configured).
+              </p>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* PDF download */}
+      <section className="card text-center" aria-label="Download report">
+        <DownloadReportButton
+          about={about}
+          benefits={benefits}
+          results={results}
+          insights={insights}
+          disabled={insightsStatus === "loading"}
+        />
       </section>
 
       {/* Chart */}
