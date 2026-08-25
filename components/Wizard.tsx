@@ -1,108 +1,141 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Stepper from "@/components/Stepper";
-import StepAbout from "@/components/StepAbout";
-import StepBenefits from "@/components/StepBenefits";
-import StepGoals from "@/components/StepGoals";
-import StepAssets from "@/components/StepAssets";
-import StepResults from "@/components/StepResults";
-import { DEFAULT_ASSUMPTIONS } from "@/lib/calc";
-import { initialBenefitsState } from "@/lib/profile";
-import type { AboutState, AssetsState, Asset, BenefitsState, GoalsState } from "@/types";
+import Step1About from "@/components/steps/Step1About";
+import Step2Benefits from "@/components/steps/Step2Benefits";
+import Step3Goals from "@/components/steps/Step3Goals";
+import Step4Accounts from "@/components/steps/Step4Accounts";
+import ResultsDashboard from "@/components/report/ResultsDashboard";
+import { ageFromISO } from "@/lib/format";
+import {
+  clearStoredState,
+  DEFAULT_STATE,
+  loadState,
+  loadStep,
+  saveState,
+  saveStep,
+  type WizardState,
+} from "@/components/wizard-state";
 
-let assetCounter = 0;
-export function newAsset(): Asset {
-  assetCounter += 1;
-  return {
-    id: `asset-${assetCounter}-${Date.now()}`,
-    type: "401k",
-    institution: "",
-    balance: 0,
-    contribution: 0,
-    frequency: "monthly",
-  };
-}
-
-const initialAbout = (): AboutState => ({
-  currentAge: 35,
-  retirementAge: 65,
-  maritalStatus: null,
-  federalStatus: null,
-  agency: "",
-  yearsOfService: null,
-});
-
-const initialGoals = (): GoalsState => ({
-  lifestyle: null,
-  monthlySpend: 0,
-  homePaidOff: true,
-  monthlyHousing: 0,
-  monthlySocialSecurity: 0,
-  idealRetirement: "",
-  biggestWorry: "",
-  priorities: [],
-});
-
-const initialAssets = (): AssetsState => ({
-  assets: [newAsset()],
-  annualEmployerMatch: 0,
-  assumptions: { ...DEFAULT_ASSUMPTIONS },
-});
-
+/**
+ * Single-page 5-step wizard. All state lives here (one source of truth),
+ * persisted to sessionStorage so refresh doesn't lose progress.
+ */
 export default function Wizard() {
+  const [state, setStateRaw] = useState<WizardState>(DEFAULT_STATE);
   const [step, setStep] = useState(1);
-  const [about, setAbout] = useState<AboutState>(initialAbout);
-  const [benefits, setBenefits] = useState<BenefitsState>(initialBenefitsState);
-  const [goals, setGoals] = useState<GoalsState>(initialGoals);
-  const [assetsStep, setAssetsStep] = useState<AssetsState>(initialAssets);
+  const [hydrated, setHydrated] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Rehydrate from sessionStorage on mount (client only).
+  useEffect(() => {
+    setStateRaw(loadState());
+    setStep(loadStep());
+    setHydrated(true);
+  }, []);
+
+  // Persist on change.
+  useEffect(() => {
+    if (hydrated) saveState(state);
+  }, [state, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveStep(step);
+  }, [step, hydrated]);
+
+  const setState = useCallback(
+    (updater: (prev: WizardState) => WizardState) => setStateRaw(updater),
+    []
+  );
+
+  const goTo = (next: number) => {
+    setStep(next);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const validateStep1 = (): boolean => {
+    const errs: Record<string, string> = {};
+    const age = ageFromISO(state.federal.dob);
+    if (!state.federal.dob) errs.dob = "Date of birth is required.";
+    else if (age === null || age < 18 || age > 80)
+      errs.dob = "Please enter a date of birth for an age between 18 and 80.";
+    if (!state.federal.scd) errs.scd = "Service Computation Date is required.";
+    else {
+      const scdDate = new Date(`${state.federal.scd}T00:00:00`);
+      if (Number.isNaN(scdDate.getTime()) || scdDate.getTime() > Date.now())
+        errs.scd = "SCD must be a valid date on or before today.";
+    }
+    if (!(state.federal.salary > 0)) errs.salary = "Please enter your current annual salary.";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const startOver = () => {
-    setAbout(initialAbout());
-    setBenefits(initialBenefitsState());
-    setGoals(initialGoals());
-    setAssetsStep(initialAssets());
-    setStep(1);
+    clearStoredState();
+    setStateRaw(DEFAULT_STATE);
+    setErrors({});
+    goTo(1);
   };
 
+  if (!hydrated) {
+    // Avoid hydration mismatch with sessionStorage-backed state.
+    return (
+      <div className="card animate-pulse space-y-4" aria-label="Loading calculator">
+        <div className="h-6 w-1/3 rounded bg-gray-200" />
+        <div className="h-4 w-2/3 rounded bg-gray-200" />
+        <div className="h-32 rounded bg-gray-100" />
+      </div>
+    );
+  }
+
+  if (step === 5) {
+    return (
+      <ResultsDashboard
+        state={state}
+        setState={setState}
+        onStartOver={startOver}
+        onAdjust={() => goTo(4)}
+      />
+    );
+  }
+
   return (
-    <div>
+    <>
       <Stepper current={step} />
-      {step === 1 && <StepAbout about={about} onChange={setAbout} onNext={() => setStep(2)} />}
+      {step === 1 && (
+        <Step1About
+          state={state}
+          setState={setState}
+          errors={errors}
+          onNext={() => {
+            if (validateStep1()) goTo(2);
+          }}
+        />
+      )}
       {step === 2 && (
-        <StepBenefits
-          benefits={benefits}
-          onChange={setBenefits}
-          onBack={() => setStep(1)}
-          onNext={() => setStep(3)}
+        <Step2Benefits
+          state={state}
+          setState={setState}
+          onNext={() => goTo(3)}
+          onBack={() => goTo(1)}
         />
       )}
       {step === 3 && (
-        <StepGoals
-          goals={goals}
-          onChange={setGoals}
-          onBack={() => setStep(2)}
-          onNext={() => setStep(4)}
+        <Step3Goals
+          state={state}
+          setState={setState}
+          onNext={() => goTo(4)}
+          onBack={() => goTo(2)}
         />
       )}
       {step === 4 && (
-        <StepAssets
-          assetsStep={assetsStep}
-          onChange={setAssetsStep}
-          onBack={() => setStep(3)}
-          onNext={() => setStep(5)}
+        <Step4Accounts
+          state={state}
+          setState={setState}
+          onNext={() => goTo(5)}
+          onBack={() => goTo(3)}
         />
       )}
-      {step === 5 && (
-        <StepResults
-          about={about}
-          benefits={benefits}
-          goals={goals}
-          assetsStep={assetsStep}
-          onBack={() => setStep(4)}
-          onStartOver={startOver}
-        />
-      )}
-    </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 /**
- * Branded United Benefits PDF report, rendered client-side with
- * @react-pdf/renderer. Uses built-in Helvetica for reliability.
+ * Branded United Benefits PDF report (rebuild spec v3), rendered client-side
+ * with @react-pdf/renderer. Page 1: eligibility + income breakdown.
+ * Page 2: gap + risk + age-57 snapshot + narratives.
  */
 
 import {
@@ -12,34 +13,26 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type {
-  AboutState,
-  AdvisorInsights,
-  BenefitsState,
-} from "@/types";
-import type { ResultsSummary } from "@/lib/calc";
-import { BENEFIT_LABELS, BENEFIT_ORDER } from "@/lib/profile";
+  EligibilityScenario,
+  GapNarrativeResponse,
+  IncomeBreakdown,
+  Age57Snapshot,
+  SSEstimateResponse,
+} from "@/types/federal";
 
 const NAVY = "#21205f";
 const MULBERRY = "#9c221f";
 const GOLD = "#c9a227";
 const GREEN = "#2e7d4f";
+const MIDBLUE = "#4a6da7";
 const GRAY = "#6b7280";
 const LIGHT = "#f7f7f9";
 
-const BAND_COLORS: Record<string, string> = {
-  "on-track": GREEN,
-  "getting-close": GOLD,
-  "needs-attention": MULBERRY,
+const usd = (n: number) => {
+  const rounded = Math.round(n);
+  const sign = rounded < 0 ? "-" : "";
+  return `${sign}$${Math.abs(rounded).toLocaleString("en-US")}`;
 };
-
-const BAND_LABELS: Record<string, string> = {
-  "on-track": "On track",
-  "getting-close": "Getting close",
-  "needs-attention": "Needs attention",
-};
-
-const usd = (n: number) =>
-  `$${Math.round(n).toLocaleString("en-US")}`;
 
 const styles = StyleSheet.create({
   page: {
@@ -59,31 +52,31 @@ const styles = StyleSheet.create({
   },
   logo: { height: 40, width: 133 },
   headerDate: { fontSize: 9, color: GRAY },
-  rule: { height: 3, backgroundColor: NAVY, marginBottom: 20 },
-  title: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 22,
-    color: NAVY,
-    marginBottom: 4,
-  },
-  preparedFor: { fontSize: 10, color: GRAY, marginBottom: 20 },
-  bigRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
-  bigBox: {
-    flex: 1,
-    backgroundColor: LIGHT,
-    borderRadius: 6,
-    padding: 14,
-  },
-  bigLabel: { fontSize: 9, color: GRAY, marginBottom: 4 },
-  bigValue: { fontFamily: "Helvetica-Bold", fontSize: 20 },
+  rule: { height: 3, backgroundColor: NAVY, marginBottom: 18 },
+  title: { fontFamily: "Helvetica-Bold", fontSize: 22, color: NAVY, marginBottom: 4 },
+  preparedFor: { fontSize: 10, color: GRAY, marginBottom: 16 },
   sectionTitle: {
     fontFamily: "Helvetica-Bold",
     fontSize: 13,
     color: NAVY,
-    marginTop: 16,
+    marginTop: 14,
     marginBottom: 8,
   },
   bodyText: { fontSize: 10, lineHeight: 1.5, color: "#374151" },
+  row3: { flexDirection: "row", gap: 10, marginBottom: 10 },
+  box: { flex: 1, backgroundColor: LIGHT, borderRadius: 6, padding: 10 },
+  boxLabel: { fontSize: 8, color: GRAY, marginBottom: 3 },
+  boxValue: { fontFamily: "Helvetica-Bold", fontSize: 14, color: NAVY },
+  boxSub: { fontSize: 8, color: GRAY, marginTop: 2 },
+  incomeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 5,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#e5e7eb",
+  },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
   meterOuter: {
     height: 10,
     backgroundColor: "#e5e7eb",
@@ -91,20 +84,8 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 4,
   },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 5,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#e5e7eb",
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-    marginTop: 2,
-  },
+  recItem: { flexDirection: "row", marginBottom: 6 },
+  recNum: { width: 16, fontFamily: "Helvetica-Bold", fontSize: 10, color: NAVY },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -118,22 +99,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   footerText: { color: "#ffffff", fontSize: 8 },
-  gapItem: { flexDirection: "row", marginBottom: 8 },
-  bullet: { width: 12, fontSize: 10, color: MULBERRY },
-  stepNum: {
-    width: 16,
-    fontFamily: "Helvetica-Bold",
-    fontSize: 10,
-    color: NAVY,
-  },
-  italic: { fontFamily: "Helvetica-Oblique", fontSize: 10, color: "#374151", lineHeight: 1.5 },
 });
 
-const STATUS_META: Record<string, { color: string; label: string }> = {
-  using: { color: GREEN, label: "Using it" },
-  "not-using": { color: MULBERRY, label: "Not using it" },
-  unsure: { color: GOLD, label: "Not sure" },
-};
+const LOGO_SRC =
+  typeof window !== "undefined"
+    ? `${window.location.origin}/images/ub-logo.png`
+    : "/images/ub-logo.png";
 
 function Footer() {
   return (
@@ -149,11 +120,6 @@ function Footer() {
   );
 }
 
-const LOGO_SRC =
-  typeof window !== "undefined"
-    ? `${window.location.origin}/images/ub-logo.png`
-    : "/images/ub-logo.png";
-
 function Header({ dateStr }: { dateStr: string }) {
   return (
     <>
@@ -167,167 +133,289 @@ function Header({ dateStr }: { dateStr: string }) {
   );
 }
 
-export interface ReportPDFProps {
-  about: AboutState;
-  benefits: BenefitsState;
-  results: ResultsSummary;
-  insights: AdvisorInsights | null;
+function IncomeRow({ color, label, monthly }: { color: string; label: string; monthly: number }) {
+  return (
+    <View style={styles.incomeRow}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={[styles.dot, { backgroundColor: color }]} />
+        <Text style={{ fontSize: 10 }}>{label}</Text>
+      </View>
+      <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10, color: NAVY }}>
+        {usd(monthly)}/mo  •  {usd(monthly * 12)}/yr
+      </Text>
+    </View>
+  );
 }
 
-export default function ReportPDF({ about, benefits, results, insights }: ReportPDFProps) {
+export interface ReportPDFProps {
+  currentAge: number;
+  retirementAge: number;
+  replacementPercent: number;
+  system: string;
+  advisorName: string;
+  scenarios: EligibilityScenario[];
+  breakdown: IncomeBreakdown;
+  snapshot: Age57Snapshot;
+  ssEstimate: SSEstimateResponse | null;
+  narrative: GapNarrativeResponse | null;
+  fegliAnnual: number;
+  fegliTwentyYearTotal: number;
+  privateTwentyYearTotal: number;
+  fegliCoverage: number;
+  underinsuredShortfall: number;
+  disabilityCareerEarnings: number;
+  fersDisabilityYear1: number;
+  fersDisabilityAfter: number;
+  missedMatchAnnual: number;
+}
+
+export default function ReportPDF(props: ReportPDFProps) {
+  const {
+    currentAge,
+    retirementAge,
+    replacementPercent,
+    system,
+    advisorName,
+    scenarios,
+    breakdown,
+    snapshot,
+    ssEstimate,
+    narrative,
+  } = props;
+
   const dateStr = new Date().toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
-  const bandColor = BAND_COLORS[results.band] ?? NAVY;
-  const bandLabel = BAND_LABELS[results.band] ?? results.band;
-  const marital =
-    about.maritalStatus === "married" ? "Married" : about.maritalStatus === "single" ? "Single" : "—";
+  const hasGap = breakdown.gapMonthly > 0;
+  const gapColor = hasGap ? MULBERRY : GREEN;
+  const pctOfTarget =
+    breakdown.targetMonthly > 0
+      ? Math.min(150, (breakdown.totalMonthly / breakdown.targetMonthly) * 100)
+      : 100;
 
   return (
-    <Document title="United Benefits Retirement Readiness Report">
-      {/* ---------- Page 1: Numbers ---------- */}
+    <Document title="United Benefits Retirement Report">
+      {/* ---------- Page 1: Eligibility + Income ---------- */}
       <Page size="LETTER" style={styles.page}>
         <Header dateStr={dateStr} />
-        <Text style={styles.title}>Retirement Readiness Report</Text>
+        <Text style={styles.title}>Your Retirement Report</Text>
         <Text style={styles.preparedFor}>
-          Prepared for a {about.currentAge}-year-old ({marital}), targeting retirement at age{" "}
-          {about.retirementAge} • {dateStr}
+          Prepared for a {Math.floor(currentAge)}-year-old {system} employee, targeting retirement
+          at age {retirementAge}
+          {advisorName && advisorName !== "Not sure / Assign me one"
+            ? ` • Advisor: ${advisorName}`
+            : ""}{" "}
+          • {dateStr}
         </Text>
 
-        <View style={styles.bigRow}>
-          <View style={styles.bigBox}>
-            <Text style={styles.bigLabel}>Projected savings at age {about.retirementAge}</Text>
-            <Text style={[styles.bigValue, { color: bandColor }]}>{usd(results.projected)}</Text>
+        <Text style={styles.sectionTitle}>A. Your retirement eligibility</Text>
+        <View style={styles.row3}>
+          {scenarios.map((s) => (
+            <View
+              key={s.rule}
+              style={[
+                styles.box,
+                s.earliest ? { borderWidth: 1.5, borderColor: GREEN } : {},
+              ]}
+            >
+              <Text style={[styles.boxLabel, s.earliest ? { color: GREEN } : {}]}>
+                {s.rule}
+                {s.earliest ? "  •  EARLIEST" : ""}
+              </Text>
+              <Text style={[styles.boxValue, { fontSize: 12 }]}>{s.eligibleDate}</Text>
+              <Text style={styles.boxSub}>
+                Age {Math.floor(s.ageAtDate)} • ~{Math.round(s.serviceAtDate)} yrs service
+                {s.yearsUntil > 0 ? ` • ${s.yearsUntil.toFixed(1)} yrs away` : " • eligible now"}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={styles.sectionTitle}>B. Projected monthly income at {retirementAge}</Text>
+        <IncomeRow color={NAVY} label="FERS Basic Pension" monthly={breakdown.pensionMonthly} />
+        {breakdown.supplementMonthly > 0 && (
+          <IncomeRow
+            color={GOLD}
+            label="FERS Supplement (ends at age 62)"
+            monthly={breakdown.supplementMonthly}
+          />
+        )}
+        <IncomeRow
+          color={MIDBLUE}
+          label={`Social Security (from age ${breakdown.ssStartAgeNumeric})`}
+          monthly={breakdown.ssMonthly}
+        />
+        <IncomeRow color={MULBERRY} label="TSP drawdown (4% rule)" monthly={breakdown.tspMonthly} />
+        {breakdown.outsideMonthly > 0 && (
+          <IncomeRow color={GRAY} label="Outside accounts & other income" monthly={breakdown.outsideMonthly} />
+        )}
+        <View style={[styles.incomeRow, { borderBottomWidth: 0, marginTop: 2 }]}>
+          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 11, color: NAVY }}>
+            Total projected income
+          </Text>
+          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 11, color: NAVY }}>
+            {usd(breakdown.totalMonthly)}/mo
+          </Text>
+        </View>
+
+        {ssEstimate && (
+          <>
+            <Text style={styles.sectionTitle}>Social Security scenarios</Text>
+            <View style={styles.row3}>
+              <View style={styles.box}>
+                <Text style={styles.boxLabel}>Claim at 62</Text>
+                <Text style={styles.boxValue}>{usd(ssEstimate.at62)}/mo</Text>
+              </View>
+              <View style={styles.box}>
+                <Text style={styles.boxLabel}>At FRA ({ssEstimate.fra})</Text>
+                <Text style={styles.boxValue}>{usd(ssEstimate.atFRA)}/mo</Text>
+              </View>
+              <View style={styles.box}>
+                <Text style={styles.boxLabel}>At 70</Text>
+                <Text style={styles.boxValue}>{usd(ssEstimate.at70)}/mo</Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        <Text style={styles.sectionTitle}>Key projections</Text>
+        <View style={styles.row3}>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Projected TSP at {retirementAge}</Text>
+            <Text style={styles.boxValue}>{usd(breakdown.tspBalanceAtRetirement)}</Text>
           </View>
-          <View style={styles.bigBox}>
-            <Text style={styles.bigLabel}>Estimated amount needed</Text>
-            <Text style={[styles.bigValue, { color: NAVY }]}>{usd(results.needed)}</Text>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Projected High-3 salary</Text>
+            <Text style={styles.boxValue}>{usd(breakdown.high3)}</Text>
+          </View>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Service at retirement</Text>
+            <Text style={styles.boxValue}>~{Math.round(breakdown.serviceAtRetirement)} yrs</Text>
           </View>
         </View>
 
-        <View style={{ marginBottom: 4, flexDirection: "row", justifyContent: "space-between" }}>
-          <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 11, color: bandColor }}>
-            {bandLabel}
-          </Text>
-          <Text style={{ fontSize: 11, color: GRAY }}>
-            {Math.round(results.percent)}% of goal
-          </Text>
+        <Footer />
+      </Page>
+
+      {/* ---------- Page 2: Gap + Risk + Age-57 + Narratives ---------- */}
+      <Page size="LETTER" style={styles.page}>
+        <Header dateStr={dateStr} />
+
+        <Text style={styles.sectionTitle}>C. Gap analysis</Text>
+        <View style={styles.row3}>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>
+              Target ({Math.round(replacementPercent * 100)}% of final salary)
+            </Text>
+            <Text style={styles.boxValue}>{usd(breakdown.targetMonthly)}/mo</Text>
+          </View>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Projected income</Text>
+            <Text style={styles.boxValue}>{usd(breakdown.totalMonthly)}/mo</Text>
+          </View>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>{hasGap ? "Gap" : "Surplus"}</Text>
+            <Text style={[styles.boxValue, { color: gapColor }]}>
+              {usd(Math.abs(breakdown.gapMonthly))}/mo
+            </Text>
+          </View>
         </View>
         <View style={styles.meterOuter}>
           <View
             style={{
               height: 10,
               borderRadius: 5,
-              width: `${Math.min(100, (results.barPercent / 150) * 100)}%`,
-              backgroundColor: bandColor,
+              width: `${Math.min(100, pctOfTarget)}%`,
+              backgroundColor: gapColor,
             }}
           />
         </View>
-
-        <Text style={styles.sectionTitle}>Monthly income in retirement</Text>
-        <View style={styles.bigRow}>
-          <View style={styles.bigBox}>
-            <Text style={styles.bigLabel}>Sustainable monthly income from savings</Text>
-            <Text style={[styles.bigValue, { fontSize: 16, color: NAVY }]}>
-              {usd(results.sustainableMonthlyIncome)}
-            </Text>
-          </View>
-          <View style={styles.bigBox}>
-            <Text style={styles.bigLabel}>Estimated monthly need at retirement</Text>
-            <Text style={[styles.bigValue, { fontSize: 16, color: NAVY }]}>
-              {usd(results.netNeedAtRetirementMonthly)}
-            </Text>
-          </View>
-        </View>
-
-        {results.gap > 0 ? (
+        <Text style={{ fontSize: 9, color: GRAY, marginBottom: 6 }}>
+          {Math.round(pctOfTarget)}% of your income target
+        </Text>
+        {props.missedMatchAnnual > 0 && (
           <Text style={[styles.bodyText, { color: MULBERRY }]}>
-            Gap to close: {usd(results.gap)}.
-            {Number.isFinite(results.extraMonthlyToClose)
-              ? ` Contributing about ${usd(results.extraMonthlyToClose)} more per month could close the gap by age ${about.retirementAge}.`
-              : ""}
-          </Text>
-        ) : (
-          <Text style={[styles.bodyText, { color: GREEN }]}>
-            You are projected to meet or exceed your retirement goal. Keep it up!
+            TSP match alert: you are missing {usd(props.missedMatchAnnual)}/year in free agency
+            match by contributing under 5%.
           </Text>
         )}
+        {narrative?.gapNarrative && (
+          <Text style={[styles.bodyText, { marginTop: 4 }]}>{narrative.gapNarrative}</Text>
+        )}
 
-        <Footer />
-      </Page>
+        <Text style={styles.sectionTitle}>D. Risk analysis</Text>
+        <View style={styles.row3}>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>FEGLI annual premium now</Text>
+            <Text style={styles.boxValue}>{usd(props.fegliAnnual)}</Text>
+            <Text style={styles.boxSub}>{usd(props.fegliCoverage)} coverage</Text>
+          </View>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>20-yr FEGLI vs private term</Text>
+            <Text style={[styles.boxValue, { fontSize: 12 }]}>
+              {usd(props.fegliTwentyYearTotal)} vs {usd(props.privateTwentyYearTotal)}
+            </Text>
+          </View>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Career earnings at risk (disability)</Text>
+            <Text style={[styles.boxValue, { color: MULBERRY, fontSize: 12 }]}>
+              {usd(props.disabilityCareerEarnings)}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.bodyText}>
+          Federal benefits do not include disability insurance. FERS disability retirement pays
+          roughly 60% of High-3 in year 1 ({usd(props.fersDisabilityYear1)}/yr) and 40% thereafter
+          ({usd(props.fersDisabilityAfter)}/yr).
+          {props.underinsuredShortfall > 0
+            ? ` Your death benefit is about ${usd(props.underinsuredShortfall)} below the recommended 10× income level.`
+            : " Your death benefit meets the 10× income rule of thumb."}
+        </Text>
+        {narrative?.riskNarrative && (
+          <Text style={[styles.bodyText, { marginTop: 4 }]}>{narrative.riskNarrative}</Text>
+        )}
 
-      {/* ---------- Page 2: Benefits + Insights ---------- */}
-      <Page size="LETTER" style={styles.page}>
-        <Header dateStr={dateStr} />
-
-        <Text style={styles.sectionTitle}>Federal benefits engagement</Text>
-        <View style={{ marginBottom: 8 }}>
-          {BENEFIT_ORDER.map((key) => {
-            const sel = benefits[key];
-            const meta = sel?.status ? STATUS_META[sel.status] : null;
-            return (
-              <View key={key} style={styles.row}>
-                <Text style={{ fontSize: 10 }}>{BENEFIT_LABELS[key]}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  {meta && <View style={[styles.dot, { backgroundColor: meta.color }]} />}
-                  <Text style={{ fontSize: 10, color: meta ? meta.color : GRAY }}>
-                    {meta ? meta.label : "Not answered"}
-                    {key === "tsp" && sel?.tspFullMatch
-                      ? `  (5%+ match: ${sel.tspFullMatch === "yes" ? "yes" : sel.tspFullMatch === "no" ? "no" : "not sure"})`
-                      : ""}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
+        <Text style={styles.sectionTitle}>E. At age 57 — what your income could look like</Text>
+        <View style={styles.row3}>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Projected salary at 57</Text>
+            <Text style={styles.boxValue}>{usd(snapshot.projectedSalaryAt57)}</Text>
+          </View>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Income at 57 (pension + suppl. + TSP)</Text>
+            <Text style={styles.boxValue}>{usd(snapshot.totalMonthly)}/mo</Text>
+          </View>
+          <View style={styles.box}>
+            <Text style={styles.boxLabel}>Replacement achieved</Text>
+            <Text
+              style={[
+                styles.boxValue,
+                {
+                  color:
+                    snapshot.replacementPercentAchieved >= 0.7 ? GREEN : MULBERRY,
+                },
+              ]}
+            >
+              {Math.round(snapshot.replacementPercentAchieved * 100)}%
+            </Text>
+            <Text style={styles.boxSub}>vs 70–80% recommended</Text>
+          </View>
         </View>
 
-        {insights ? (
+        {narrative && narrative.topRecommendations.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Your Personalized Advisor Insights</Text>
-            <Text style={styles.bodyText}>{insights.summary}</Text>
-
-            {insights.benefitGaps.length > 0 && (
-              <>
-                <Text style={styles.sectionTitle}>Benefit gaps to review</Text>
-                {insights.benefitGaps.map((g, i) => (
-                  <View key={i} style={styles.gapItem}>
-                    <Text style={styles.bullet}>•</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10 }}>{g.title}</Text>
-                      <Text style={styles.bodyText}>{g.detail}</Text>
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
-
-            <Text style={styles.sectionTitle}>Your goals &amp; your numbers</Text>
-            <Text style={styles.bodyText}>{insights.goalAlignment}</Text>
-
-            <Text style={styles.sectionTitle}>Recommended next steps</Text>
-            {insights.actionSteps.map((s, i) => (
-              <View key={i} style={styles.gapItem}>
-                <Text style={styles.stepNum}>{i + 1}.</Text>
+            <Text style={styles.sectionTitle}>Top recommendations</Text>
+            {narrative.topRecommendations.map((r, i) => (
+              <View key={i} style={styles.recItem}>
+                <Text style={styles.recNum}>{i + 1}.</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10 }}>{s.step}</Text>
-                  <Text style={styles.bodyText}>{s.why}</Text>
+                  <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10 }}>{r.title}</Text>
+                  <Text style={styles.bodyText}>{r.detail}</Text>
                 </View>
               </View>
             ))}
-
-            <Text style={[styles.italic, { marginTop: 10 }]}>{insights.encouragement}</Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.sectionTitle}>Your Personalized Advisor Insights</Text>
-            <Text style={styles.bodyText}>
-              Personalized insights were not available when this report was generated. Schedule a
-              free benefits review at unitedbenefits.com/contact to walk through your numbers with
-              an advisor.
-            </Text>
           </>
         )}
 

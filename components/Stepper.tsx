@@ -1,8 +1,8 @@
-const steps = ["About You", "Benefits", "Goals", "Accounts", "Results"];
+const steps = ["About You", "Benefits", "Goals", "Accounts", "Report"];
 
 export default function Stepper({ current }: { current: number }) {
   return (
-    <nav aria-label="Progress" className="mb-8">
+    <nav aria-label="Progress" className="stepper mb-8">
       <ol className="flex items-center gap-2 sm:gap-4">
         {steps.map((label, i) => {
           const step = i + 1;
@@ -20,7 +20,7 @@ export default function Stepper({ current }: { current: number }) {
                       : "bg-white border border-gray-300 text-gray-500"
                 }`}
               >
-                {step}
+                {done ? "✓" : step}
               </span>
               <span
                 className={`hidden text-sm font-semibold sm:inline ${

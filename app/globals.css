@@ -37,4 +37,94 @@
   .error-text {
     @apply text-mulberry text-sm mt-1 font-semibold;
   }
+  /* Toggle pill buttons (Yes/No, quick-select) */
+  .pill {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-lg border px-4 py-2 text-base font-semibold
+      transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-navy
+      border-gray-300 bg-white text-gray-600 hover:border-navy;
+  }
+  .pill-active {
+    @apply border-navy bg-navy text-white hover:border-navy;
+  }
+}
+
+/* Branded range slider: navy track, mulberry thumb. */
+.ub-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  accent-color: #9c221f;
+}
+.ub-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #21205f;
+}
+.ub-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #21205f;
+}
+.ub-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -9px;
+  height: 24px;
+  width: 24px;
+  border-radius: 9999px;
+  background: #9c221f;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.ub-range::-moz-range-thumb {
+  height: 24px;
+  width: 24px;
+  border-radius: 9999px;
+  background: #9c221f;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.ub-range:focus-visible {
+  outline: none;
+}
+.ub-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(33, 32, 95, 0.35);
+}
+.ub-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px rgba(33, 32, 95, 0.35);
+}
+
+/* Print styles: clean single-column report, all accordions expanded,
+   no interactive controls. */
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+  header nav,
+  .stepper,
+  .no-print,
+  .assumptions-panel,
+  .report-actions button,
+  input[type="range"] {
+    display: none !important;
+  }
+  /* Force every accordion section open */
+  .acc-body {
+    grid-template-rows: 1fr !important;
+  }
+  .acc-header svg {
+    display: none !important;
+  }
+  section,
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+    break-inside: avoid;
+  }
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
 }
