@@ -1,6 +1,7 @@
 "use client";
 
-import { ADVISORS } from "@/lib/advisors";
+import { useEffect, useState } from "react";
+import { ADVISORS, type Advisor } from "@/lib/advisors";
 import { mraLabel } from "@/lib/fers-calculations";
 import { ageFromISO, yearsMonthsLabel } from "@/lib/format";
 import type {
@@ -26,6 +27,25 @@ export default function Step1About({ state, setState, onNext, errors }: Props) {
   const setFederal = (patch: Partial<WizardState["federal"]>) =>
     setState((prev) => ({ ...prev, federal: { ...prev.federal, ...patch } }));
 
+  // Advisor list: static fallback immediately, live DB list once fetched.
+  const [advisors, setAdvisors] = useState<Advisor[]>(ADVISORS);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/advisors")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.advisors) && data.advisors.length > 0) {
+          setAdvisors(data.advisors);
+        }
+      })
+      .catch(() => {
+        // keep static fallback
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const age = ageFromISO(federal.dob);
   const service = ageFromISO(federal.scd); // years since SCD
   const birthYear = federal.dob ? new Date(`${federal.dob}T00:00:00`).getFullYear() : null;
@@ -50,7 +70,7 @@ export default function Step1About({ state, setState, onNext, errors }: Props) {
           value={state.advisorName}
           onChange={(e) => setState((prev) => ({ ...prev, advisorName: e.target.value }))}
         >
-          {ADVISORS.map((a) => (
+          {advisors.map((a) => (
             <option key={a.name} value={a.name}>
               {a.name}
             </option>

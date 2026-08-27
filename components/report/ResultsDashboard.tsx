@@ -151,6 +151,50 @@ export default function ResultsDashboard({ state, setState, onStartOver, onAdjus
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, currentAge, breakdown]);
 
+  // ------- persist submission to the database (fire-and-forget, once) -------
+  const submissionSaved = useRef(false);
+  useEffect(() => {
+    if (submissionSaved.current) return;
+    // wait until AI narrative/SS estimate have had a chance to load, but
+    // don't wait forever — save after 20s regardless so no lead is lost.
+    const ready = narrative !== null || narrativeError;
+    const timer = setTimeout(() => save(), ready ? 0 : 20000);
+    function save() {
+      if (submissionSaved.current) return;
+      submissionSaved.current = true;
+      let intake: unknown = null;
+      try {
+        intake = JSON.parse(window.sessionStorage.getItem("ub-intake") ?? "null");
+      } catch {
+        intake = null;
+      }
+      if (!intake) return; // no intake info — nothing to attribute the run to
+      fetch("/api/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intake,
+          state,
+          results: {
+            targetMonthly: Math.round(breakdown.targetMonthly),
+            totalMonthly: Math.round(breakdown.totalMonthly),
+            gapMonthly: Math.round(breakdown.gapMonthly),
+            pensionMonthly: Math.round(breakdown.pensionMonthly),
+            supplementMonthly: Math.round(breakdown.supplementMonthly),
+            ssMonthly: Math.round(breakdown.ssMonthly),
+            tspMonthly: Math.round(breakdown.tspMonthly),
+            outsideMonthly: Math.round(breakdown.outsideMonthly),
+            currentAge: Math.round(currentAge),
+            retirementAge: state.goals.targetRetirementAge,
+          },
+          aiNarratives: { narrative, ssEstimate },
+        }),
+      }).catch(() => undefined); // fire-and-forget: never disturb the UI
+    }
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrative, narrativeError]);
+
   const onGapFirstOpen = useCallback(() => {
     if (!narrativeFetched.current) fetchNarrative();
   }, [fetchNarrative]);
