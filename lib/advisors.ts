@@ -12,7 +12,7 @@ export interface Advisor {
 
 const STATIC_ADVISORS: Advisor[] = [
   { name: "Not sure / Assign me one", email: "" },
-  { name: "Sample Advisor", email: "advisor@unitedbenefits.com" },
+  { name: "Sam", email: "" },
 ];
 
 function fromEnv(): Advisor[] | null {

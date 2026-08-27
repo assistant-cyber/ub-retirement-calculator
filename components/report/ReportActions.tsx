@@ -114,7 +114,7 @@ export default function ReportActions({
             type="button"
             disabled
             className="btn-secondary w-full cursor-not-allowed opacity-50"
-            title="Coming soon — sign in support is on the way"
+            title="Coming soon — account saving is on the way"
           >
             Save to my account
           </button>
@@ -122,7 +122,7 @@ export default function ReportActions({
             role="tooltip"
             className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-navy px-3 py-1.5 text-xs text-white opacity-0 shadow transition-opacity group-hover:opacity-100"
           >
-            Coming soon — sign in support is on the way
+            Coming soon — account saving is on the way
           </span>
         </span>
 

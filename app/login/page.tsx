@@ -4,14 +4,47 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+type FillerType = "individual" | "advisor";
 
-  const continueAsGuest = () => {
+export interface IntakeInfo {
+  filler: FillerType;
+  name: string;
+  phone: string;
+  email: string;
+  description: string;
+}
+
+export default function IntakePage() {
+  const router = useRouter();
+  const [filler, setFiller] = useState<FillerType | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+
+  const isAdvisor = filler === "advisor";
+
+  const start = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!filler) {
+      setError("Please choose who is filling this out.");
+      return;
+    }
+    if (!name.trim() || !phone.trim() || !email.trim()) {
+      setError("Please fill in name, phone number, and email.");
+      return;
+    }
+    setError("");
+    const intake: IntakeInfo = {
+      filler,
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
+      description: description.trim(),
+    };
     try {
-      window.sessionStorage.setItem("ub-guest", "true");
+      window.sessionStorage.setItem("ub-intake", JSON.stringify(intake));
     } catch {
       // storage unavailable — continue anyway
     }
@@ -19,8 +52,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center py-8">
-      <div className="card w-full text-center">
+    <div className="mx-auto flex max-w-lg flex-col items-center py-8">
+      <div className="card w-full">
         <Image
           src="/images/ub-logo.webp"
           alt="United Benefits"
@@ -29,55 +62,127 @@ export default function LoginPage() {
           priority
           className="mx-auto h-12 w-auto"
         />
-        <h1 className="mt-6 text-2xl font-bold">Sign in to save your progress</h1>
-        <p className="mt-2 text-gray-600">
-          Get your personalized federal retirement report in about five minutes.
+        <h1 className="mt-6 text-center text-2xl font-bold">
+          Before we begin
+        </h1>
+        <p className="mt-2 text-center text-gray-600">
+          Tell us who&apos;s filling this out so we can tailor your report.
         </p>
 
-        <form
-          className="mt-6 space-y-3 text-left"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setSent(true);
-          }}
-        >
-          <label htmlFor="login-email" className="label">
-            Email address
-          </label>
-          <input
-            id="login-email"
-            type="email"
-            required
-            className="input"
-            placeholder="you@example.gov"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setSent(false);
-            }}
-          />
-          <button type="submit" className="btn-secondary w-full">
-            Send magic link
-          </button>
-          {sent && (
-            <p className="rounded-lg border border-gold/50 bg-gold/10 px-4 py-3 text-sm text-gray-700" role="status">
-              Check your email — magic links are coming soon. Continue as guest for now.
+        <form className="mt-6 space-y-5" onSubmit={start}>
+          <fieldset>
+            <legend className="label">Who is filling this out?</legend>
+            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setFiller("individual")}
+                aria-pressed={filler === "individual"}
+                className={`min-h-[64px] rounded-xl border-2 px-4 py-3 text-left transition ${
+                  filler === "individual"
+                    ? "border-navy bg-navy text-white"
+                    : "border-gray-200 bg-white hover:border-navy/50"
+                }`}
+              >
+                <span className="block font-semibold">An individual</span>
+                <span className={`block text-sm ${filler === "individual" ? "text-white/80" : "text-gray-500"}`}>
+                  I&apos;m planning my own retirement
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiller("advisor")}
+                aria-pressed={filler === "advisor"}
+                className={`min-h-[64px] rounded-xl border-2 px-4 py-3 text-left transition ${
+                  filler === "advisor"
+                    ? "border-navy bg-navy text-white"
+                    : "border-gray-200 bg-white hover:border-navy/50"
+                }`}
+              >
+                <span className="block font-semibold">An advisor</span>
+                <span className={`block text-sm ${filler === "advisor" ? "text-white/80" : "text-gray-500"}`}>
+                  On behalf of a client
+                </span>
+              </button>
+            </div>
+          </fieldset>
+
+          {filler && (
+            <>
+              <div>
+                <label htmlFor="intake-name" className="label">
+                  {isAdvisor ? "Client name" : "Your name"}
+                </label>
+                <input
+                  id="intake-name"
+                  type="text"
+                  required
+                  className="input"
+                  placeholder={isAdvisor ? "Client's full name" : "Your full name"}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="intake-phone" className="label">
+                  {isAdvisor ? "Client phone number" : "Phone number"}
+                </label>
+                <input
+                  id="intake-phone"
+                  type="tel"
+                  required
+                  className="input"
+                  placeholder="(555) 555-5555"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="intake-email" className="label">
+                  {isAdvisor ? "Client email" : "Email"}
+                </label>
+                <input
+                  id="intake-email"
+                  type="email"
+                  required
+                  className="input"
+                  placeholder={isAdvisor ? "client@example.gov" : "you@example.gov"}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="intake-description" className="label">
+                  Short description <span className="font-normal text-gray-500">(optional)</span>
+                </label>
+                <textarea
+                  id="intake-description"
+                  className="input min-h-[88px]"
+                  maxLength={500}
+                  placeholder={
+                    isAdvisor
+                      ? "Anything useful about this client — situation, goals, concerns…"
+                      : "Anything you'd like us to know about your situation…"
+                  }
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {error && (
+            <p className="text-sm font-semibold text-mulberry" role="alert">
+              {error}
             </p>
           )}
+
+          <button type="submit" className="btn-primary w-full">
+            Start the calculator →
+          </button>
+          <p className="text-center text-xs text-gray-500">
+            Your answers are stored only in your browser session.
+          </p>
         </form>
-
-        <div className="my-6 flex items-center gap-3" aria-hidden="true">
-          <span className="h-px flex-1 bg-gray-200" />
-          <span className="text-sm text-gray-500">or</span>
-          <span className="h-px flex-1 bg-gray-200" />
-        </div>
-
-        <button type="button" className="btn-primary w-full" onClick={continueAsGuest}>
-          Continue as guest
-        </button>
-        <p className="mt-3 text-xs text-gray-500">
-          Guest sessions are stored only in your browser and cleared when you close the tab.
-        </p>
       </div>
     </div>
   );
