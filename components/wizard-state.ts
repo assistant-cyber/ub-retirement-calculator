@@ -140,7 +140,7 @@ export function saveState(state: WizardState): void {
 export function loadStep(): number {
   if (typeof window === "undefined") return 1;
   const n = Number(window.sessionStorage.getItem(STEP_KEY));
-  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : 1;
+  return Number.isInteger(n) && n >= 1 && n <= 7 ? n : 1;
 }
 
 export function saveStep(step: number): void {
